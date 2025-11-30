@@ -34,13 +34,15 @@ export interface AppSettings {
   theme: "light" | "dark" | "auto";
   dataSaver: boolean;
   chapterLanguages: string[];
+  adultMode: boolean;
 }
 
 const defaultSettings: AppSettings = {
   readingMode: "vertical",
   theme: "auto",
   dataSaver: true,
-  chapterLanguages: ["en", "ja", "zh", "ko", "es", "fr", "de", "pt-br", "pt", "it", "ru", "ar", "hi", "th", "pl"],
+  chapterLanguages: ["en", "ja"],
+  adultMode: false,
 };
 
 export const storage = {

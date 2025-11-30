@@ -19,19 +19,57 @@ import { storage, AppSettings } from "@/services/storage";
 const LANGUAGES = [
   { code: "en", name: "English" },
   { code: "ja", name: "Japanese" },
-  { code: "zh", name: "Chinese" },
+  { code: "ja-ro", name: "Japanese (Romanized)" },
+  { code: "zh", name: "Chinese (Simplified)" },
+  { code: "zh-hk", name: "Chinese (Traditional)" },
+  { code: "zh-ro", name: "Chinese (Romanized)" },
   { code: "ko", name: "Korean" },
-  { code: "es", name: "Spanish" },
+  { code: "ko-ro", name: "Korean (Romanized)" },
+  { code: "es", name: "Spanish (Spain)" },
+  { code: "es-la", name: "Spanish (Latin America)" },
+  { code: "pt-br", name: "Portuguese (Brazil)" },
+  { code: "pt", name: "Portuguese" },
   { code: "fr", name: "French" },
   { code: "de", name: "German" },
-  { code: "pt-br", name: "Portuguese (BR)" },
-  { code: "pt", name: "Portuguese" },
   { code: "it", name: "Italian" },
   { code: "ru", name: "Russian" },
-  { code: "ar", name: "Arabic" },
-  { code: "hi", name: "Hindi" },
-  { code: "th", name: "Thai" },
   { code: "pl", name: "Polish" },
+  { code: "tr", name: "Turkish" },
+  { code: "id", name: "Indonesian" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "th", name: "Thai" },
+  { code: "ar", name: "Arabic" },
+  { code: "he", name: "Hebrew" },
+  { code: "fa", name: "Persian" },
+  { code: "hi", name: "Hindi" },
+  { code: "ta", name: "Tamil" },
+  { code: "ne", name: "Nepali" },
+  { code: "mn", name: "Mongolian" },
+  { code: "el", name: "Greek" },
+  { code: "hu", name: "Hungarian" },
+  { code: "ro", name: "Romanian" },
+  { code: "cs", name: "Czech" },
+  { code: "uk", name: "Ukrainian" },
+  { code: "bg", name: "Bulgarian" },
+  { code: "sv", name: "Swedish" },
+  { code: "da", name: "Danish" },
+  { code: "nl", name: "Dutch" },
+  { code: "no", name: "Norwegian" },
+  { code: "fi", name: "Finnish" },
+  { code: "ms", name: "Malay" },
+  { code: "tl", name: "Filipino" },
+  { code: "my", name: "Burmese" },
+  { code: "bn", name: "Bengali" },
+  { code: "hr", name: "Croatian" },
+  { code: "sr", name: "Serbian" },
+  { code: "sk", name: "Slovak" },
+  { code: "lt", name: "Lithuanian" },
+  { code: "lv", name: "Latvian" },
+  { code: "et", name: "Estonian" },
+  { code: "ka", name: "Georgian" },
+  { code: "az", name: "Azerbaijani" },
+  { code: "kk", name: "Kazakh" },
+  { code: "uz", name: "Uzbek" },
 ];
 
 export default function ProfileScreen() {
@@ -41,7 +79,8 @@ export default function ProfileScreen() {
     readingMode: "vertical",
     theme: "auto",
     dataSaver: true,
-    chapterLanguages: ["en", "ja", "zh", "ko", "es", "fr", "de", "pt-br", "pt", "it", "ru", "ar", "hi", "th", "pl"],
+    chapterLanguages: ["en", "ja"],
+    adultMode: false,
   });
 
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
@@ -244,6 +283,42 @@ export default function ProfileScreen() {
               value={settings.dataSaver}
               onValueChange={(value) => updateSetting("dataSaver", value)}
               trackColor={{ false: theme.backgroundSecondary, true: theme.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <ThemedText
+          type="caption"
+          style={[styles.sectionTitle, { color: theme.textSecondary }]}
+        >
+          CONTENT
+        </ThemedText>
+        <View
+          style={[
+            styles.sectionContent,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Feather name="alert-circle" size={20} color={settings.adultMode ? "#FF6B6B" : theme.text} />
+              <View>
+                <ThemedText type="body">18+ Mode</ThemedText>
+                <ThemedText
+                  type="caption"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Show only adult content
+                </ThemedText>
+              </View>
+            </View>
+            <Switch
+              value={settings.adultMode}
+              onValueChange={(value) => updateSetting("adultMode", value)}
+              trackColor={{ false: theme.backgroundSecondary, true: "#FF6B6B" }}
               thumbColor="#FFFFFF"
             />
           </View>

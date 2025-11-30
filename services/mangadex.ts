@@ -62,7 +62,7 @@ export const mangadexApi = {
   async searchManga(
     query: string,
     limit: number = 15,
-    options: { status?: string; originalLanguage?: string } = {}
+    options: { status?: string; originalLanguage?: string; adultMode?: boolean; languages?: string[] } = {}
   ): Promise<{ data: Manga[]; total: number }> {
     const params = new URLSearchParams({
       title: query,
@@ -78,6 +78,20 @@ export const mangadexApi = {
       params.append("originalLanguage[]", options.originalLanguage);
     }
 
+    if (options.languages && options.languages.length > 0) {
+      options.languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (options.adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
+
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
 
@@ -88,13 +102,26 @@ export const mangadexApi = {
     };
   },
 
-  async getPopularManga(limit: number = 9): Promise<{ data: Manga[]; total: number }> {
+  async getPopularManga(limit: number = 9, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
     const params = new URLSearchParams({
       limit: limit.toString(),
       "includes[]": "cover_art",
       "order[followedCount]": "desc",
-      "contentRating[]": "safe",
     });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
 
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
@@ -106,13 +133,89 @@ export const mangadexApi = {
     };
   },
 
-  async getLatestUpdates(limit: number = 9): Promise<{ data: Manga[]; total: number }> {
+  async getRandomManga(limit: number = 20, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
+    const baseParams = new URLSearchParams({
+      limit: "1",
+      "includes[]": "cover_art",
+    });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        baseParams.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      baseParams.append("contentRating[]", "erotica");
+      baseParams.append("contentRating[]", "pornographic");
+    } else {
+      baseParams.append("contentRating[]", "safe");
+      baseParams.append("contentRating[]", "suggestive");
+    }
+
+    const countResponse = await fetch(`${BASE_URL}/manga?${baseParams}`);
+    if (!countResponse.ok) throw new Error(`MangaDex API error: ${countResponse.status}`);
+    const countData = await countResponse.json();
+    const total = countData.total || 0;
+
+    const maxOffset = Math.max(0, total - limit);
+    const randomOffset = maxOffset > 0 ? Math.floor(Math.random() * Math.min(maxOffset, 500)) : 0;
+    
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: randomOffset.toString(),
+      "includes[]": "cover_art",
+      "order[followedCount]": "desc",
+    });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
+
+    const response = await fetch(`${BASE_URL}/manga?${params}`);
+    if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
+
+    const data = await response.json();
+    const mangaList = formatMangaList(data.data || []);
+    
+    const shuffled = [...mangaList].sort(() => Math.random() - 0.5);
+    
+    return {
+      data: shuffled,
+      total: total,
+    };
+  },
+
+  async getLatestUpdates(limit: number = 9, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
     const params = new URLSearchParams({
       limit: limit.toString(),
       "includes[]": "cover_art",
       "order[latestUploadedChapter]": "desc",
-      "contentRating[]": "safe",
     });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
 
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
@@ -124,14 +227,27 @@ export const mangadexApi = {
     };
   },
 
-  async getManga(limit: number = 15): Promise<{ data: Manga[]; total: number }> {
+  async getManga(limit: number = 15, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
     const params = new URLSearchParams({
       limit: limit.toString(),
       "includes[]": "cover_art",
       "originalLanguage[]": "ja",
       "order[followedCount]": "desc",
-      "contentRating[]": "safe",
     });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
 
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
@@ -143,33 +259,92 @@ export const mangadexApi = {
     };
   },
 
-  async getManhwa(limit: number = 9): Promise<{ data: Manga[]; total: number }> {
+  async getManhwa(limit: number = 9, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
+    const baseParams = new URLSearchParams({
+      limit: "1",
+      "includes[]": "cover_art",
+      "originalLanguage[]": "ko",
+    });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        baseParams.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      baseParams.append("contentRating[]", "erotica");
+      baseParams.append("contentRating[]", "pornographic");
+    } else {
+      baseParams.append("contentRating[]", "safe");
+      baseParams.append("contentRating[]", "suggestive");
+    }
+
+    const countResponse = await fetch(`${BASE_URL}/manga?${baseParams}`);
+    if (!countResponse.ok) throw new Error(`MangaDex API error: ${countResponse.status}`);
+    const countData = await countResponse.json();
+    const total = countData.total || 0;
+
+    const maxOffset = Math.max(0, total - limit);
+    const randomOffset = maxOffset > 0 ? Math.floor(Math.random() * Math.min(maxOffset, 300)) : 0;
+
     const params = new URLSearchParams({
       limit: limit.toString(),
+      offset: randomOffset.toString(),
       "includes[]": "cover_art",
       "originalLanguage[]": "ko",
       "order[followedCount]": "desc",
-      "contentRating[]": "safe",
     });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
 
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);
 
     const data = await response.json();
+    const manhwaList = formatMangaList(data.data || []);
+    
+    const shuffled = [...manhwaList].sort(() => Math.random() - 0.5);
+    
     return {
-      data: formatMangaList(data.data || []),
-      total: data.total || 0,
+      data: shuffled,
+      total: total,
     };
   },
 
-  async getManhua(limit: number = 9): Promise<{ data: Manga[]; total: number }> {
+  async getManhua(limit: number = 9, adultMode: boolean = false, languages: string[] = []): Promise<{ data: Manga[]; total: number }> {
     const params = new URLSearchParams({
       limit: limit.toString(),
       "includes[]": "cover_art",
       "originalLanguage[]": "zh",
       "order[followedCount]": "desc",
-      "contentRating[]": "safe",
     });
+
+    if (languages.length > 0) {
+      languages.forEach(lang => {
+        params.append("availableTranslatedLanguage[]", lang);
+      });
+    }
+
+    if (adultMode) {
+      params.append("contentRating[]", "erotica");
+      params.append("contentRating[]", "pornographic");
+    } else {
+      params.append("contentRating[]", "safe");
+      params.append("contentRating[]", "suggestive");
+    }
 
     const response = await fetch(`${BASE_URL}/manga?${params}`);
     if (!response.ok) throw new Error(`MangaDex API error: ${response.status}`);

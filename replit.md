@@ -4,9 +4,9 @@
 A mobile manga reading application built with Expo React Native that integrates with the MangaDex API. Users can browse popular manga, search for titles, read chapters, and track their reading progress locally.
 
 ## Current State
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Status**: MVP Complete
-**Last Updated**: November 27, 2025
+**Last Updated**: November 30, 2025
 
 ## Tech Stack
 - **Framework**: Expo SDK 54 with React Native
@@ -55,9 +55,11 @@ A mobile manga reading application built with Expo React Native that integrates 
 1. **Browse Tab**: Popular manga grid with pull-to-refresh and infinite scroll
 2. **Search Tab**: Real-time search with 500ms debounce, recent searches
 3. **Library Tab**: Bookmarks and reading history with tab switching
-4. **Profile Tab**: Reading mode settings, data saver toggle
+4. **Profile Tab**: Reading mode settings, data saver toggle, 18+ mode toggle, language selection
 5. **Manga Detail**: Cover, synopsis, tags, chapter list with read indicators
 6. **Chapter Reader**: Vertical/horizontal modes, page progress, auto-save
+7. **18+ Mode**: Toggle in Profile to show only adult content (erotica/pornographic)
+8. **Language Filter**: Select from 50+ languages - only shows manga with translations in selected languages
 
 ### Data Flow
 - All manga data comes from MangaDex API
@@ -70,8 +72,9 @@ A mobile manga reading application built with Expo React Native that integrates 
 ### API Limitations
 - MangaDex API has CORS restrictions - works best on native (Expo Go)
 - Rate limited to ~5 requests/second
-- Only safe-for-work content fetched
-- English chapters prioritized
+- Content filtered based on 18+ mode setting (safe/suggestive when off, erotica/pornographic when on)
+- Manga filtered by available translated languages (user selects in Profile settings)
+- Uses `availableTranslatedLanguage` parameter to filter manga by translation availability
 
 ### Testing
 - Web preview may show API errors due to CORS
@@ -82,8 +85,16 @@ A mobile manga reading application built with Expo React Native that integrates 
 - Default reading mode: Vertical scroll
 - Data saver: Enabled by default
 - Theme: Auto (follows system)
+- 18+ Mode: Disabled by default
+- Default Languages: English + Japanese (user can customize from 50+ available languages)
 
 ## Recent Changes
+- Added language filter feature with 50+ MangaDex-supported languages
+- Only manga with translations in user-selected languages are shown
+- Languages include regional variants (zh-hk, pt-br, es-la) and romanized versions (ja-ro, ko-ro)
+- Added 18+ mode toggle in Profile settings
+- When 18+ mode enabled, shows only adult content (erotica/pornographic)
+- When 18+ mode disabled, shows safe/suggestive content
 - Initial MVP implementation
 - MangaDex API integration
 - Local storage for progress tracking

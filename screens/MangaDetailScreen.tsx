@@ -82,17 +82,15 @@ export default function MangaDetailScreen({
         : ["en"];
       setChapterLanguage(langCodes[0]);
 
-      const [mangaData, chaptersData, bookmarked, readChapterIds, savedProgress] =
+      const [mangaData, bookmarked, readChapterIds, savedProgress] =
         await Promise.all([
           mangadexApi.getMangaDetails(mangaId),
-          mangadexApi.getChapters(mangaId, langCodes),
           storage.isBookmarked(mangaId),
           storage.getReadChapters(mangaId),
           storage.getReadingProgress(mangaId),
         ]);
 
       setManga(mangaData);
-      setChapters(chaptersData);
       setIsBookmarked(bookmarked);
       setReadChapters(readChapterIds);
 
@@ -102,6 +100,18 @@ export default function MangaDetailScreen({
           chapterNumber: savedProgress.chapterNumber,
         });
       }
+
+      let chaptersData = await mangadexApi.getChapters(mangaId, langCodes);
+      
+      if (chaptersData.length === 0) {
+        const fallbackLangs = ["en", "ko", "ja", "zh", "es", "pt-br", "fr", "de", "ru"];
+        chaptersData = await mangadexApi.getChapters(mangaId, fallbackLangs);
+        if (chaptersData.length > 0) {
+          setChapterLanguage("multi");
+        }
+      }
+
+      setChapters(chaptersData);
     } catch (err) {
       console.error("Error fetching manga details:", err);
     } finally {

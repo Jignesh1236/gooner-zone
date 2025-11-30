@@ -1,41 +1,65 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { StyleSheet, View, Dimensions, RefreshControl, Platform } from "react-native";
+import { StyleSheet, View, Dimensions, RefreshControl, Platform, FlatList, Pressable } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { FlatList } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import { MangaCard } from "@/components/MangaCard";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { EmptyState } from "@/components/EmptyState";
 import { ContinueReadingButton } from "@/components/ContinueReadingButton";
+import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { mangadexApi, Manga } from "@/services/mangadex";
+import { storage } from "@/services/storage";
 import { BrowseStackParamList } from "@/navigation/BrowseStackNavigator";
+import { useFocusEffect } from "@react-navigation/native";
 
 type BrowseScreenProps = {
   navigation: NativeStackNavigationProp<BrowseStackParamList, "Browse">;
 };
 
+type TabType = "manga" | "manhwa";
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_WIDTH = (SCREEN_WIDTH - Spacing.xl * 2 - Spacing.md) / 2;
+const TAB_WIDTH = (SCREEN_WIDTH - Spacing.xl * 2) / 2;
 const IS_WEB = Platform.OS === "web";
 
 export default function BrowseScreen({ navigation }: BrowseScreenProps) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const headerHeight = useHeaderHeight();
 
-  const [manga, setManga] = useState<Manga[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>("manga");
+  const [mangaList, setMangaList] = useState<Manga[]>([]);
+  const [manhwaList, setManhwaList] = useState<Manga[]>([]);
   const [loading, setLoading] = useState(!IS_WEB);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(IS_WEB ? "web" : null);
+  const [adultMode, setAdultMode] = useState(false);
+  const [languages, setLanguages] = useState<string[]>(["en", "ja"]);
 
-  const fetchManga = useCallback(
-    async (isRefresh = false) => {
+  const indicatorPosition = useSharedValue(0);
+
+  const animatedIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorPosition.value }],
+  }));
+
+  const handleTabPress = (tab: TabType) => {
+    setActiveTab(tab);
+    indicatorPosition.value = withSpring(tab === "manga" ? 0 : TAB_WIDTH, {
+      damping: 20,
+      stiffness: 200,
+    });
+  };
+
+  const fetchAllData = useCallback(
+    async (isRefresh = false, isAdultMode = false, langs: string[] = ["en", "ja"]) => {
       try {
         if (isRefresh) {
           setRefreshing(true);
@@ -44,11 +68,17 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
         }
         setError(null);
 
-        const result = await mangadexApi.getPopularManga(20);
-        setManga(result.data);
+        const [mangaResult, manhwaResult] = await Promise.all([
+          mangadexApi.getRandomManga(20, isAdultMode, langs),
+          mangadexApi.getManhwa(20, isAdultMode, langs),
+        ]);
+
+        setMangaList(mangaResult.data);
+        const shuffledManhwa = [...manhwaResult.data].sort(() => Math.random() - 0.5);
+        setManhwaList(shuffledManhwa);
       } catch (err) {
-        setError("Failed to load manga. Please try again.");
-        console.error("Error fetching manga:", err);
+        setError("Failed to load content. Please try again.");
+        console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -57,21 +87,45 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
     [],
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const loadSettings = async () => {
+        const settings = await storage.getSettings();
+        const settingsChanged = settings.adultMode !== adultMode || 
+          JSON.stringify(settings.chapterLanguages) !== JSON.stringify(languages);
+        if (settingsChanged) {
+          setAdultMode(settings.adultMode);
+          setLanguages(settings.chapterLanguages);
+          if (!IS_WEB) {
+            fetchAllData(false, settings.adultMode, settings.chapterLanguages);
+          }
+        }
+      };
+      loadSettings();
+    }, [adultMode, languages])
+  );
+
   useEffect(() => {
     if (!IS_WEB) {
-      fetchManga();
+      const loadInitialData = async () => {
+        const settings = await storage.getSettings();
+        setAdultMode(settings.adultMode);
+        setLanguages(settings.chapterLanguages);
+        fetchAllData(false, settings.adultMode, settings.chapterLanguages);
+      };
+      loadInitialData();
     }
   }, []);
 
   const handleRefresh = () => {
-    fetchManga(true);
+    fetchAllData(true, adultMode, languages);
   };
 
   const handleMangaPress = (item: Manga) => {
     navigation.navigate("MangaDetail", { mangaId: item.id });
   };
 
-  const renderItem = ({ item, index }: { item: Manga; index: number }) => (
+  const renderGridItem = ({ item, index }: { item: Manga; index: number }) => (
     <View
       style={[
         styles.cardContainer,
@@ -86,11 +140,53 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
     </View>
   );
 
+  const renderListHeader = () => (
+    <View style={[styles.tabContainer, { backgroundColor: theme.backgroundSecondary }]}>
+      <Animated.View 
+        style={[
+          styles.tabIndicator, 
+          { backgroundColor: theme.primary },
+          animatedIndicatorStyle
+        ]} 
+      />
+      <Pressable 
+        style={styles.tab} 
+        onPress={() => handleTabPress("manga")}
+      >
+        <ThemedText 
+          type="body" 
+          style={[
+            styles.tabText,
+            { color: activeTab === "manga" ? "#FFFFFF" : theme.textSecondary }
+          ]}
+        >
+          Manga
+        </ThemedText>
+      </Pressable>
+      <Pressable 
+        style={styles.tab} 
+        onPress={() => handleTabPress("manhwa")}
+      >
+        <ThemedText 
+          type="body" 
+          style={[
+            styles.tabText,
+            { color: activeTab === "manhwa" ? "#FFFFFF" : theme.textSecondary }
+          ]}
+        >
+          Manhwa
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
+
+  const currentList = activeTab === "manga" ? mangaList : manhwaList;
+
   if (loading) {
     return <LoadingIndicator fullScreen />;
   }
 
-  if (error && manga.length === 0) {
+  if (error && mangaList.length === 0 && manhwaList.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
         <EmptyState
@@ -98,7 +194,7 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
           title={IS_WEB ? "Use Expo Go for Full Experience" : "Connection Error"}
           message={IS_WEB 
             ? "The MangaDex API doesn't work in web browsers due to security restrictions. Scan the QR code in the URL bar to open in Expo Go on your phone for full manga browsing." 
-            : error || "Failed to load manga. Please try again."}
+            : error || "Failed to load content. Please try again."}
         />
       </View>
     );
@@ -107,14 +203,15 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       <FlatList
-        data={manga}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        data={currentList}
+        renderItem={renderGridItem}
+        keyExtractor={(item) => `${activeTab}-${item.id}`}
         numColumns={2}
+        ListHeaderComponent={renderListHeader}
         contentContainerStyle={[
           styles.listContent,
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl + 80,
           },
         ]}
@@ -131,8 +228,8 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
         ListEmptyComponent={
           <EmptyState
             icon="book"
-            title="No Manga Found"
-            message="Check back later for new content"
+            title={`No ${activeTab === "manga" ? "Manga" : "Manhwa"} Found`}
+            message="No content found for selected language"
           />
         }
       />
@@ -144,6 +241,28 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  tabContainer: {
+    height: 48,
+    borderRadius: BorderRadius.lg,
+    flexDirection: "row",
+    marginBottom: Spacing.lg,
+    overflow: "hidden",
+  },
+  tabIndicator: {
+    position: "absolute",
+    width: TAB_WIDTH,
+    height: "100%",
+    borderRadius: BorderRadius.lg,
+  },
+  tab: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabText: {
+    fontWeight: "600",
+    fontSize: 16,
   },
   listContent: {
     paddingHorizontal: Spacing.xl,

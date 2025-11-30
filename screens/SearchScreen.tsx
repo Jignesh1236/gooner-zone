@@ -6,6 +6,7 @@ import {
   Dimensions,
   Pressable,
   ScrollView,
+  Platform,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +14,13 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { FlatList } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
+
+import { useFocusEffect } from "@react-navigation/native";
 
 import { MangaCard } from "@/components/MangaCard";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
@@ -28,8 +36,12 @@ type SearchScreenProps = {
   navigation: NativeStackNavigationProp<SearchStackParamList, "Search">;
 };
 
+type SearchTab = "all" | "manga" | "manhwa";
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_WIDTH = (SCREEN_WIDTH - Spacing.xl * 2 - Spacing.md) / 2;
+const TAB_WIDTH = (SCREEN_WIDTH - Spacing.xl * 2) / 3;
+const IS_WEB = Platform.OS === "web";
 
 export default function SearchScreen({ navigation }: SearchScreenProps) {
   const { theme } = useTheme();
@@ -39,22 +51,66 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
 
   const [query, setQuery] = useState("");
   const [manga, setManga] = useState<Manga[]>([]);
+  const [suggestions, setSuggestions] = useState<Manga[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [searched, setSearched] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [adultMode, setAdultMode] = useState(false);
+  const [languages, setLanguages] = useState<string[]>(["en", "ja"]);
+  const [activeTab, setActiveTab] = useState<SearchTab>("all");
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const suggestionRef = useRef<NodeJS.Timeout | null>(null);
+  const indicatorPosition = useSharedValue(0);
 
   useEffect(() => {
     loadRecentSearches();
+    loadSettings();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const checkSettings = async () => {
+        const settings = await storage.getSettings();
+        setAdultMode(settings.adultMode);
+        setLanguages(settings.chapterLanguages);
+      };
+      checkSettings();
+    }, [])
+  );
+
+  const loadSettings = async () => {
+    const settings = await storage.getSettings();
+    setAdultMode(settings.adultMode);
+    setLanguages(settings.chapterLanguages);
+  };
 
   const loadRecentSearches = async () => {
     const searches = await storage.getRecentSearches();
     setRecentSearches(searches);
   };
 
-  const searchManga = useCallback(async (searchQuery: string) => {
+  const getLanguageFilter = (tab: SearchTab) => {
+    switch (tab) {
+      case "manga":
+        return "ja";
+      case "manhwa":
+        return "ko";
+      default:
+        return undefined;
+    }
+  };
+
+  const searchManga = useCallback(async (
+    searchQuery: string, 
+    isAdultMode: boolean, 
+    langs: string[] = ["en", "ja"],
+    tab: SearchTab = "all"
+  ) => {
+    if (IS_WEB) return;
+    
     if (!searchQuery.trim()) {
       setManga([]);
       setSearched(false);
@@ -64,8 +120,14 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
     try {
       setLoading(true);
       setSearched(true);
+      setShowSuggestions(false);
 
-      const result = await mangadexApi.searchManga(searchQuery, 40);
+      const originalLanguage = getLanguageFilter(tab);
+      const result = await mangadexApi.searchManga(searchQuery, 40, { 
+        adultMode: isAdultMode, 
+        languages: langs,
+        originalLanguage,
+      });
       setManga(result.data);
 
       await storage.addRecentSearch(searchQuery);
@@ -77,27 +139,81 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
     }
   }, []);
 
+  const fetchSuggestions = useCallback(async (
+    searchQuery: string, 
+    isAdultMode: boolean, 
+    langs: string[] = ["en", "ja"],
+    tab: SearchTab = "all"
+  ) => {
+    if (IS_WEB) return;
+    
+    if (!searchQuery.trim() || searchQuery.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      setLoadingSuggestions(true);
+      const originalLanguage = getLanguageFilter(tab);
+      const result = await mangadexApi.searchManga(searchQuery, 5, { 
+        adultMode: isAdultMode, 
+        languages: langs,
+        originalLanguage,
+      });
+      setSuggestions(result.data);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error("Error fetching suggestions:", err);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, []);
+
   const handleQueryChange = (text: string) => {
     setQuery(text);
+    setSearched(false);
 
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+    if (suggestionRef.current) {
+      clearTimeout(suggestionRef.current);
+    }
 
-    debounceRef.current = setTimeout(() => {
-      searchManga(text);
-    }, 500);
+    if (text.length >= 2) {
+      suggestionRef.current = setTimeout(() => {
+        fetchSuggestions(text, adultMode, languages, activeTab);
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (query.trim()) {
+      setShowSuggestions(false);
+      searchManga(query, adultMode, languages, activeTab);
+    }
+  };
+
+  const handleSuggestionPress = (item: Manga) => {
+    setShowSuggestions(false);
+    navigation.navigate("MangaDetail", { mangaId: item.id });
   };
 
   const handleClearQuery = () => {
     setQuery("");
     setManga([]);
+    setSuggestions([]);
     setSearched(false);
+    setShowSuggestions(false);
   };
 
   const handleRecentSearchPress = (search: string) => {
     setQuery(search);
-    searchManga(search);
+    searchManga(search, adultMode, languages, activeTab);
   };
 
   const handleClearRecentSearches = async () => {
@@ -108,6 +224,22 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
   const handleMangaPress = (item: Manga) => {
     navigation.navigate("MangaDetail", { mangaId: item.id });
   };
+
+  const handleTabChange = (tab: SearchTab) => {
+    const tabIndex = tab === "all" ? 0 : tab === "manga" ? 1 : 2;
+    indicatorPosition.value = withTiming(tabIndex * TAB_WIDTH, { duration: 200 });
+    setActiveTab(tab);
+    
+    if (query.trim() && searched) {
+      searchManga(query, adultMode, languages, tab);
+    } else if (query.trim() && showSuggestions) {
+      fetchSuggestions(query, adultMode, languages, tab);
+    }
+  };
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorPosition.value }],
+  }));
 
   const renderItem = ({ item, index }: { item: Manga; index: number }) => (
     <View
@@ -124,6 +256,65 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
     </View>
   );
 
+  const renderSuggestions = () => {
+    if (!showSuggestions || suggestions.length === 0) return null;
+
+    return (
+      <View style={[styles.suggestionsContainer, { backgroundColor: theme.backgroundDefault }]}>
+        <View style={styles.suggestionsHeader}>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Suggestions
+          </ThemedText>
+          {loadingSuggestions && (
+            <ThemedText type="small" style={{ color: theme.primary }}>
+              Loading...
+            </ThemedText>
+          )}
+        </View>
+        {suggestions.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => handleSuggestionPress(item)}
+            style={({ pressed }) => [
+              styles.suggestionItem,
+              {
+                backgroundColor: pressed ? theme.backgroundRoot : "transparent",
+              },
+            ]}
+          >
+            <Feather name="book-open" size={16} color={theme.primary} />
+            <View style={styles.suggestionTextContainer}>
+              <ThemedText type="body" numberOfLines={1} style={styles.suggestionTitle}>
+                {item.title}
+              </ThemedText>
+              {item.type && (
+                <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  {item.type}
+                </ThemedText>
+              )}
+            </View>
+            <Feather name="arrow-up-right" size={16} color={theme.textSecondary} />
+          </Pressable>
+        ))}
+        <Pressable
+          onPress={handleSearch}
+          style={({ pressed }) => [
+            styles.searchAllButton,
+            {
+              backgroundColor: theme.primary,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <Feather name="search" size={16} color="#fff" />
+          <ThemedText type="body" style={{ color: "#fff" }}>
+            Search all for "{query}"
+          </ThemedText>
+        </Pressable>
+      </View>
+    );
+  };
+
   const renderRecentSearches = () => {
     if (query.trim() || recentSearches.length === 0) return null;
 
@@ -133,7 +324,7 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
         contentContainerStyle={[
           styles.recentContent,
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
           },
         ]}
@@ -172,6 +363,52 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
     );
   };
 
+  const renderTabs = () => (
+    <View style={styles.tabContainer}>
+      <View style={[styles.tabBar, { backgroundColor: theme.backgroundDefault }]}>
+        <Animated.View
+          style={[
+            styles.tabIndicator,
+            { backgroundColor: theme.primary },
+            indicatorStyle,
+          ]}
+        />
+        {(["all", "manga", "manhwa"] as SearchTab[]).map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => handleTabChange(tab)}
+            style={styles.tab}
+          >
+            <ThemedText
+              type="body"
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === tab ? theme.primary : theme.textSecondary,
+                  fontWeight: activeTab === tab ? "600" : "400",
+                },
+              ]}
+            >
+              {tab === "all" ? "All" : tab === "manga" ? "Manga" : "Manhwa"}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  if (IS_WEB) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+        <EmptyState
+          icon="smartphone"
+          title="Use Expo Go for Full Experience"
+          message="The MangaDex API doesn't work in web browsers due to security restrictions. Scan the QR code in the URL bar to open in Expo Go on your phone for full search functionality."
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       <View
@@ -192,10 +429,11 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
           <Feather name="search" size={20} color={theme.textSecondary} />
           <TextInput
             style={[styles.input, { color: theme.text }]}
-            placeholder="Search manga..."
+            placeholder="Search manga, manhwa..."
             placeholderTextColor={theme.textSecondary}
             value={query}
             onChangeText={handleQueryChange}
+            onSubmitEditing={handleSearch}
             returnKeyType="search"
             autoCorrect={false}
             autoCapitalize="none"
@@ -209,9 +447,18 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
             </Pressable>
           ) : null}
         </View>
+        {renderTabs()}
       </View>
 
-      {!query.trim() && !searched ? (
+      {showSuggestions && query.trim() && !searched ? (
+        <ScrollView 
+          style={styles.suggestionsScrollView}
+          contentContainerStyle={{ paddingBottom: tabBarHeight + Spacing.xl }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderSuggestions()}
+        </ScrollView>
+      ) : !query.trim() && !searched ? (
         renderRecentSearches()
       ) : loading ? (
         <LoadingIndicator fullScreen />
@@ -220,7 +467,7 @@ export default function SearchScreen({ navigation }: SearchScreenProps) {
           <EmptyState
             icon="search"
             title="No Results"
-            message={`No manga found for "${query}"`}
+            message={`No ${activeTab === "all" ? "manga/manhwa" : activeTab} found for "${query}"`}
           />
         </View>
       ) : (
@@ -249,7 +496,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: "row",
@@ -263,6 +510,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     height: "100%",
+  },
+  tabContainer: {
+    marginTop: Spacing.md,
+  },
+  tabBar: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.sm,
+    position: "relative",
+    overflow: "hidden",
+  },
+  tab: {
+    width: TAB_WIDTH,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  tabText: {
+    fontSize: 14,
+  },
+  tabIndicator: {
+    position: "absolute",
+    width: TAB_WIDTH,
+    height: "100%",
+    borderRadius: BorderRadius.sm,
+    opacity: 0.15,
   },
   listContent: {
     paddingHorizontal: Spacing.xl,
@@ -304,5 +577,42 @@ const styles = StyleSheet.create({
   },
   recentText: {
     flex: 1,
+  },
+  suggestionsScrollView: {
+    flex: 1,
+  },
+  suggestionsContainer: {
+    marginHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+  },
+  suggestionsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    marginBottom: 2,
+  },
+  searchAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    margin: Spacing.sm,
+    borderRadius: BorderRadius.xs,
   },
 });
