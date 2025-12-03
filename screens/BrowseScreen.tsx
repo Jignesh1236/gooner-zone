@@ -13,10 +13,12 @@ import { ContinueReadingButton } from "@/components/ContinueReadingButton";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { mangadexApi, Manga } from "@/services/mangadex";
+import { Feather } from "@expo/vector-icons";
+import { mangadexApi, Manga, SearchFilters } from "@/services/mangadex";
 import { storage } from "@/services/storage";
 import { BrowseStackParamList } from "@/navigation/BrowseStackNavigator";
 import { useFocusEffect } from "@react-navigation/native";
+import { SearchFiltersModal } from "@/components/SearchFiltersModal";
 
 type BrowseScreenProps = {
   navigation: NativeStackNavigationProp<BrowseStackParamList, "Browse">;
@@ -38,11 +40,19 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
   const [activeTab, setActiveTab] = useState<TabType>("manga");
   const [mangaList, setMangaList] = useState<Manga[]>([]);
   const [manhwaList, setManhwaList] = useState<Manga[]>([]);
+  const [combinedList, setCombinedList] = useState<Manga[]>([]);
   const [loading, setLoading] = useState(!IS_WEB);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(IS_WEB ? "web" : null);
   const [adultMode, setAdultMode] = useState(false);
   const [languages, setLanguages] = useState<string[]>(["en", "ja"]);
+  const [filters, setFilters] = useState<SearchFilters>({
+    includedTags: [],
+    excludedTags: [],
+    status: [],
+    sortBy: "followedCount",
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   const indicatorPosition = useSharedValue(0);
 
@@ -58,8 +68,10 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
     });
   };
 
+  const hasActiveFilters = filters.includedTags.length > 0 || filters.excludedTags.length > 0 || filters.status.length > 0 || filters.sortBy !== "followedCount";
+
   const fetchAllData = useCallback(
-    async (isRefresh = false, isAdultMode = false, langs: string[] = ["en", "ja"]) => {
+    async (isRefresh = false, isAdultMode = false, langs: string[] = ["en", "ja"], searchFilters?: SearchFilters) => {
       try {
         if (isRefresh) {
           setRefreshing(true);
@@ -68,14 +80,20 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
         }
         setError(null);
 
+        const hasFilters = searchFilters && (searchFilters.includedTags.length > 0 || searchFilters.excludedTags.length > 0 || searchFilters.status.length > 0 || searchFilters.sortBy !== "followedCount");
+
         const [mangaResult, manhwaResult] = await Promise.all([
-          mangadexApi.getRandomManga(20, isAdultMode, langs),
-          mangadexApi.getManhwa(20, isAdultMode, langs),
+          mangadexApi.getManga(40, isAdultMode, langs),
+          mangadexApi.getManhwa(40, isAdultMode, langs),
         ]);
 
         setMangaList(mangaResult.data);
-        const shuffledManhwa = [...manhwaResult.data].sort(() => Math.random() - 0.5);
-        setManhwaList(shuffledManhwa);
+        setManhwaList(manhwaResult.data);
+        
+        if (hasFilters) {
+          const combined = [...mangaResult.data, ...manhwaResult.data].sort(() => Math.random() - 0.5);
+          setCombinedList(combined);
+        }
       } catch (err) {
         setError("Failed to load content. Please try again.");
         console.error("Error fetching data:", err);
@@ -118,7 +136,12 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
   }, []);
 
   const handleRefresh = () => {
-    fetchAllData(true, adultMode, languages);
+    fetchAllData(true, adultMode, languages, filters);
+  };
+
+  const handleApplyFilters = (newFilters: SearchFilters) => {
+    setFilters(newFilters);
+    fetchAllData(false, adultMode, languages, newFilters);
   };
 
   const handleMangaPress = (item: Manga) => {
@@ -140,47 +163,81 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
     </View>
   );
 
+  const activeFiltersCount = (filters.includedTags.length + filters.excludedTags.length + filters.status.length);
+
   const renderListHeader = () => (
-    <View style={[styles.tabContainer, { backgroundColor: theme.backgroundSecondary }]}>
-      <Animated.View 
-        style={[
-          styles.tabIndicator, 
-          { backgroundColor: theme.primary },
-          animatedIndicatorStyle
-        ]} 
-      />
-      <Pressable 
-        style={styles.tab} 
-        onPress={() => handleTabPress("manga")}
-      >
-        <ThemedText 
-          type="body" 
-          style={[
-            styles.tabText,
-            { color: activeTab === "manga" ? "#FFFFFF" : theme.textSecondary }
-          ]}
-        >
-          Manga
+    <View style={styles.headerContainer}>
+      {!hasActiveFilters && (
+        <View style={[styles.tabContainer, { backgroundColor: theme.backgroundSecondary }]}>
+          <Animated.View 
+            style={[
+              styles.tabIndicator, 
+              { backgroundColor: theme.primary },
+              animatedIndicatorStyle
+            ]} 
+          />
+          <Pressable 
+            style={styles.tab} 
+            onPress={() => handleTabPress("manga")}
+          >
+            <ThemedText 
+              type="body" 
+              style={[
+                styles.tabText,
+                { color: activeTab === "manga" ? "#FFFFFF" : theme.textSecondary }
+              ]}
+            >
+              Manga
+            </ThemedText>
+          </Pressable>
+          <Pressable 
+            style={styles.tab} 
+            onPress={() => handleTabPress("manhwa")}
+          >
+            <ThemedText 
+              type="body" 
+              style={[
+                styles.tabText,
+                { color: activeTab === "manhwa" ? "#FFFFFF" : theme.textSecondary }
+              ]}
+            >
+              Manhwa
+            </ThemedText>
+          </Pressable>
+        </View>
+      )}
+      {hasActiveFilters && (
+        <ThemedText type="body" style={{ color: theme.textSecondary, fontSize: 14, marginBottom: Spacing.sm }}>
+          Combined Results ({combinedList.length})
         </ThemedText>
-      </Pressable>
-      <Pressable 
-        style={styles.tab} 
-        onPress={() => handleTabPress("manhwa")}
+      )}
+      <Pressable
+        onPress={() => setShowFilters(true)}
+        style={({ pressed }) => [
+          styles.filterButton,
+          { 
+            backgroundColor: activeFiltersCount > 0 ? theme.primary : theme.backgroundDefault,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
       >
-        <ThemedText 
-          type="body" 
-          style={[
-            styles.tabText,
-            { color: activeTab === "manhwa" ? "#FFFFFF" : theme.textSecondary }
-          ]}
-        >
-          Manhwa
-        </ThemedText>
+        <Feather 
+          name="sliders" 
+          size={20} 
+          color={activeFiltersCount > 0 ? "#FFFFFF" : theme.textSecondary} 
+        />
+        {activeFiltersCount > 0 && (
+          <View style={[styles.filterBadge, { backgroundColor: "#FFFFFF" }]}>
+            <ThemedText type="caption" style={{ color: theme.primary, fontSize: 10 }}>
+              {activeFiltersCount}
+            </ThemedText>
+          </View>
+        )}
       </Pressable>
     </View>
   );
 
-  const currentList = activeTab === "manga" ? mangaList : manhwaList;
+  const currentList = hasActiveFilters ? combinedList : (activeTab === "manga" ? mangaList : manhwaList);
 
   if (loading) {
     return <LoadingIndicator fullScreen />;
@@ -234,6 +291,13 @@ export default function BrowseScreen({ navigation }: BrowseScreenProps) {
         }
       />
       <ContinueReadingButton />
+      
+      <SearchFiltersModal
+        visible={showFilters}
+        onClose={() => setShowFilters(false)}
+        filters={filters}
+        onApply={handleApplyFilters}
+      />
     </View>
   );
 }
@@ -242,12 +306,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerContainer: {
+    gap: Spacing.md,
+  },
   tabContainer: {
     height: 48,
     borderRadius: BorderRadius.lg,
     flexDirection: "row",
-    marginBottom: Spacing.lg,
     overflow: "hidden",
+  },
+  filterButton: {
+    height: 48,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabIndicator: {
     position: "absolute",
