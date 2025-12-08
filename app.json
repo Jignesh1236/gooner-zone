@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "gooner-zone",
+    "slug": "gooner-zone",
+    "version": "4.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "gooner-zone",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gooner-zone.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#5C42C3",
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.jigneshmaru.goonerzone"
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#121212",
+          "dark": {
+            "backgroundColor": "#121212"
+          }
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#5C42C3",
+          "sounds": []
+        }
+      ]
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a06535a0-3909-48cf-b85c-16d4610ac39a"
+      }
+    },
+    "owner": "jigneshmaru"
+  }
+}
