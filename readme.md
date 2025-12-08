@@ -5,7 +5,6 @@ A mobile manga reading application built with Expo React Native that integrates 
 
 ## Current State
 **Version**: 1.5.0
-**Status**: Running on Replit
 **Last Updated**: December 5, 2025
 
 ## Tech Stack
@@ -85,7 +84,7 @@ A mobile manga reading application built with Expo React Native that integrates 
 ### Testing
 - Web preview may show API errors due to CORS
 - Use Expo Go on mobile device for full functionality
-- Scan QR code from Replit URL bar to test
+- Scan QR code from terminal to test
 
 ## User Preferences
 - Default reading mode: Vertical scroll
@@ -149,13 +148,6 @@ A mobile manga reading application built with Expo React Native that integrates 
   - Resume reading from exact saved page position
   - Added page slider for quick navigation
   - Installed @react-native-community/slider@5.0.1
-- Imported and configured for Replit environment
-  - Installed all npm dependencies
-  - Configured frontend workflow on port 5000 with proper Replit domain settings
-  - Added build script to package.json
-  - Configured deployment as static site (for Expo Go mobile app)
-  - Created .gitignore for Node.js/Expo projects
-  - Verified app runs successfully in development mode
 - Added language filter feature with 50+ MangaDex-supported languages
 - Only manga with translations in user-selected languages are shown
 - Languages include regional variants (zh-hk, pt-br, es-la) and romanized versions (ja-ro, ko-ro)
